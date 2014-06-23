@@ -73,9 +73,28 @@
 
 			          // Error callback
 			          function(error){
+
+			          	// Log the error and respond
+			          	switch(error.code) {
+					        case error.PERMISSION_DENIED:
+					            t = "User denied the request for Geolocation.";
+					            break;
+					        case error.POSITION_UNAVAILABLE:
+					            t = "Location information is unavailable.";
+					            break;
+					        case error.TIMEOUT:
+					            t = "The request to get user location timed out.";
+					            break;
+					        case error.UNKNOWN_ERROR:
+					            t = "An unknown error occurred.";
+					            break;
+					        default: t = "Unregistered error occurred";
+					    }
+
 			          	if(p.settings.debug)
-			            console.log("User denied access to location. Error: " + error);
+			            console.log("Error: " + t);
 			          }
+
 			        );
 				},
 
@@ -150,3 +169,18 @@
 		};
 
 })( jQuery, window, document );
+
+
+
+// Auto initialize the plugin
+$(function(){
+	$(document).geoloc({ 
+		debug: true,
+		result: 'country',
+		redirects: {
+			'default': '#en',
+			'IN': '#en',
+			'CN': '#cn'
+		}
+	});
+});
