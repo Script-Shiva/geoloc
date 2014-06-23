@@ -7,8 +7,7 @@
 		var pluginName = "geoloc",
 				defaults = {
 				debug: false, // true/false
-				cookie: false, // true/false
-				localStorage: true, // true/false
+				storage: 'local', // local/cookie
 				silent: false, // true/false,
 				notifications: false, // true/false
 				result: 'status', // coords/country/city/state/address/formatted
@@ -32,7 +31,7 @@
 				init: function () {
 						// like so: this.yourOtherFunction(this.element, this.settings).
 						if(this.settings.debug)
-						console.log("jQuery.geolocation Initialized");
+							console.log("jQuery.geolocation Initialized");
 
 						this.getLocation(this.element, this.settings);
 				},
@@ -41,61 +40,113 @@
 				getLocation: function () {
 					var lat, lng, t;
 
-					if(this.settings.debug)
-			        console.log('Asking user for permission');
-			        
-			    	var p = this;
+					if(this.settings.storage === 'local') {
+						if(this.settings.debug)
+							console.log('Checking users local storage');
+						
+						// Check if any value is stored earlier
+						if(localStorage.geolocAllow) {
+							
+							if(this.settings.debug)
+								console.log('Found history.');
 
-			    	if(navigator.geolocation == undefined){
-			    		if(this.settings.debug)
-			    			console.error('GeoLocation unavailable');
-			    		return;
-			    	}
+							if(localStorage.geolocAllow == 'true'){
+								// User allowed access before
+								if(this.settings.debug){
+								console.log('User allowed access before');
+								console.log('Country: ' + localStorage.geolocCountry);
+								//console.log('Language: ' + localStorage.lang);
+								}
+								
+								// Redirect user based on previous choice
+								this.redirectCountry(localStorage.geolocCountry);
+							}
+							else {
+								// User denied access before
+								console.log('User denied access before');
+								console.log('Exiting plugin');
+							}
 
-			        var location = navigator.geolocation.getCurrentPosition(
-			          
-			          // Success callback
-			          function(pos){
-			          	if(p.settings.debug)
-			            console.log(t='User allowed access. Getting location');
-			            
-			            lat = pos.coords.latitude;
-			            lng = pos.coords.longitude;
-			            
-			            if(p.settings.debug)
-			            console.log("Latitude: " + lat + ", Longitude: " + lng);
+							// Exit the plugin, as history access was successful
+							return;
+						}
+						else {
+							console.log('No history found.');
 
-			        	if(p.settings.result === 'coords')
-			        		return lat + ', ' + lng;
-			        	else
-			        		p.reverseGeo(lat, lng);
-			          },
+							// Request a new location access
+							if(this.settings.debug)
+					        	console.log('Asking user for Geo-Access permission');
+					        
+					    	var p = this;
 
-			          // Error callback
-			          function(error){
+					    	// Check if geolocation object is available
+					    	if(navigator.geolocation == undefined){
+					    		if(this.settings.debug)
+					    			console.error('GeoLocation unavailable');
+					    		return;
+					    	}
 
-			          	// Log the error and respond
-			          	switch(error.code) {
-					        case error.PERMISSION_DENIED:
-					            t = "User denied the request for Geolocation.";
-					            break;
-					        case error.POSITION_UNAVAILABLE:
-					            t = "Location information is unavailable.";
-					            break;
-					        case error.TIMEOUT:
-					            t = "The request to get user location timed out.";
-					            break;
-					        case error.UNKNOWN_ERROR:
-					            t = "An unknown error occurred.";
-					            break;
-					        default: t = "Unregistered error occurred";
-					    }
+					    	// Get the user coordinates
+					        var location = navigator.geolocation.getCurrentPosition(
+					          
+					          // Success callback
+					          function(pos){
+					          	if(p.settings.debug)
+					            console.log(t='User allowed access. Getting location');
+					        	
+					        	localStorage.geolocAllow = true;
 
-			          	if(p.settings.debug)
-			            console.log("Error: " + t);
-			          }
+					            lat = pos.coords.latitude;
+					            lng = pos.coords.longitude;
+					            
+					            if(p.settings.debug)
+					            console.log("Latitude: " + lat + ", Longitude: " + lng);
 
-			        );
+					        	if(p.settings.result === 'coords')
+					        		return lat + ', ' + lng;
+					        	else
+					        		p.reverseGeo(lat, lng);
+					          },
+
+					          // Error callback
+					          function(error){
+
+					          	// Log the error and respond
+					          	switch(error.code) {
+							        case error.PERMISSION_DENIED:
+							            t = "User denied the request for Geolocation.";
+							            localStorage.geolocAllow = false;
+							            break;
+							        case error.POSITION_UNAVAILABLE:
+							            t = "Location information is unavailable.";
+							            break;
+							        case error.TIMEOUT:
+							            t = "The request to get user location timed out.";
+							            break;
+							        case error.UNKNOWN_ERROR:
+							            t = "An unknown error occurred.";
+							            break;
+							        default: t = "Unregistered error occurred";
+							    }
+
+					          	if(p.settings.debug)
+					            console.log("Error: " + t);
+					          }
+
+					        );
+						}
+					}
+					else if(this.settings.storage === 'cookie') {
+						if(this.settings.debug)
+							console.log('Checking users cookie');
+					}
+					else {
+						if(this.settings.debug){
+							console.error('Invalid -storage- option given. Use -local- or -cookie-');
+							return;
+						}
+					}
+					
 				},
 
 				// Reverse GeoLocation to get user region
@@ -103,8 +154,14 @@
 		            var url = "http://maps.googleapis.com/maps/api/geocode/json?latlng=" + lat + ', ' + lng + "&sensor=false";
 		            var p = this;
 
+		            if(this.settings.debug)
+		            	console.log('Reverse API call to fetch country from location coordinates');
+
 		            $.getJSON(url, function (data) {
 		                var loc = p.reformat(data);
+
+		                if(p.settings.debug)
+		                	console.log('Reverse API - Success');
 
 		                switch(p.settings.result){
 		                	case 'country':
@@ -132,8 +189,14 @@
 		                	default: t = 'Unsupported result option passed';
 		                }
 
+		                // store the country value in local storage
+		                localStorage.geolocCountry = loc.country;
+
 		                if(p.settings.debug)
 		                console.log(t);
+
+		            	// Redirect user based on previous choice
+						p.redirectCountry(localStorage.geolocCountry);
 		            });
 				},
 
@@ -152,6 +215,58 @@
 			          if(prop != "address_components") me[prop] = result[prop]; 
 			        } 
 			        return me; 
+			    },
+
+			    // Redirects to country specific page
+			    redirectCountry: function(country){
+			    	
+			    	var redirect = '';
+			    	var lang = '';
+
+			    	switch(country){
+			    		case 'IN':
+			    			redirect = '#en';
+			    			lang = 'English';
+			    			break;
+			    		case 'US':
+			    			redirect = '#en';
+			    			lang = 'English';
+			    			break;
+
+			    		case 'CN':
+			    			redirect = '#cn';
+			    			lang = 'Chinese';
+			    			break;
+			    		default:
+			    			redirect = '#en';
+			    			lang = 'English';
+			    			break;
+			    	}
+
+			    	// Check if user previously allowed a redirect
+			    	if(localStorage.geolocRedirect == 'true'){
+			    		if(this.settings.debug){
+			    			console.log('User allowed redirect before');
+			    			console.log('Redirecting to -'+lang+'- version of website');
+			    		}
+			    		window.location.href = redirect;
+			    	}
+			    	else if(localStorage.geolocRedirect == 'false'){
+			    		if(this.settings.debug)
+			    			console.log('User denied redirect before');
+			    		return;
+			    	}
+			    	else {
+						var choice = window.confirm('Do you want to see ' + lang + ' version of the website ?');
+
+				    	if(choice){
+				    		localStorage.geolocRedirect = true;
+				    		window.location.href = redirect;
+				    	}
+				    	else {
+				    		localStorage.geolocRedirect = false;
+				    	}			    		
+			    	}
 			    }
 		});
 
@@ -175,8 +290,9 @@
 // Auto initialize the plugin
 $(function(){
 	$(document).geoloc({ 
-		debug: true,
+		debug: false,
 		result: 'country',
+		storage: 'local',
 		redirects: {
 			'default': '#en',
 			'IN': '#en',
